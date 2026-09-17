@@ -5,7 +5,6 @@ const EmptyState = ({ suggestions = [], onSelect }) => {
 
   return (
     <div className={styles.wrapper}>
-      <hr className={styles.divider} />
       <div className={styles.container}>
         <span className={styles.title}>What would you like to know?</span>
         {suggestions.map((item, index) => (
