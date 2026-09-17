@@ -1,5 +1,7 @@
 import { useState } from 'react';
 
+import { postChat } from '../services/api';
+
 export function useChat() {
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -14,15 +16,7 @@ export function useChat() {
     setError(null);
 
     try {
-      const response = await fetch('http://localhost:8000/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: newMessages }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || 'Failed request');
-
+      const data = await postChat(newMessages);
       setMessages([...newMessages, {
         role: 'assistant',
         content: data.message,
