@@ -33,6 +33,11 @@ Guidelines:
    ```chart
    {"type": "bar", "title": "Top Products", "data": [{"label": "Product A", "value": 100}]}
    ```
+5. Your final response must be a JSON object with exactly two fields:
+    {"message": "your answer in markdown", "suggestions": ["a relevant follow-up question"]}
+    The message field contains the complete answer, including any chart block. The suggestions field
+    contains 2-3 concise questions that naturally follow from the user's previous message and your answer.
+    Return only the JSON object, without a markdown fence or other text.
    """
 
 def generate_with_fallback(client: genai.Client, contents: list, config: types.GenerateContentConfig):
@@ -61,7 +66,27 @@ def generate_with_fallback(client: genai.Client, contents: list, config: types.G
     if last_error:
         raise last_error
 
-def run_agentic_loop(messages: list) -> str:
+def parse_agent_response(response_text: str) -> dict:
+    """Normalize the model's structured response while preserving a useful fallback."""
+    try:
+        parsed = json.loads(response_text)
+    except json.JSONDecodeError:
+        return {"message": response_text, "suggestions": []}
+
+    if not isinstance(parsed, dict) or not isinstance(parsed.get("message"), str):
+        return {"message": response_text, "suggestions": []}
+
+    suggestions = parsed.get("suggestions", [])
+    if not isinstance(suggestions, list):
+        suggestions = []
+
+    return {
+        "message": parsed["message"],
+        "suggestions": [item for item in suggestions if isinstance(item, str) and item.strip()]
+    }
+
+
+def run_agentic_loop(messages: list) -> dict:
     """Executes the loop: User Prompt -> Gemini -> Tool Execution -> Loop -> Final Answer."""
     client = get_client()
 
@@ -116,6 +141,9 @@ def run_agentic_loop(messages: list) -> str:
         
         # If no tool calls, return final generated answer
         if response.text:
-            return response.text
+            return parse_agent_response(response.text)
 
-    return "Reached maximum turn limit without completing analysis."
+    return {
+        "message": "Reached maximum turn limit without completing analysis.",
+        "suggestions": []
+    }

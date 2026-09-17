@@ -19,6 +19,7 @@ const DEFAULT_SUGGESTIONS = [
 export default function App() {
   const { messages, sendMessage, isLoading, error } = useChat();
   const [input, setInput] = useState('');
+  const latestAssistantMessage = [...messages].reverse().find((msg) => msg.role === 'assistant');
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -55,7 +56,7 @@ export default function App() {
         {/* Suggested follow-up queries */}
         {messages.length > 0 && !isLoading && (
           <KeepGoing
-            suggestions={DEFAULT_SUGGESTIONS}
+            suggestions={latestAssistantMessage?.suggestions}
             onSelect={handleSelectSuggestion}
           />
         )}

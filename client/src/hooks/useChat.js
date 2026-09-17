@@ -23,7 +23,11 @@ export function useChat() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || 'Failed request');
 
-      setMessages([...newMessages, { role: 'assistant', content: data.content }]);
+      setMessages([...newMessages, {
+        role: 'assistant',
+        content: data.message,
+        suggestions: Array.isArray(data.suggestions) ? data.suggestions : []
+      }]);
     } catch (err) {
       setError(err.message);
     } finally {

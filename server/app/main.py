@@ -25,7 +25,7 @@ class ChatRequest(BaseModel):
 async def chat_endpoint(request: ChatRequest):
     try:
         reply = run_agentic_loop(request.messages)
-        return {"content": reply}
+        return reply
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
