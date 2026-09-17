@@ -53,7 +53,7 @@ export default function App() {
         </Chat>
 
         {/* Suggested follow-up queries */}
-        {messages.length > 0 && (
+        {messages.length > 0 && !isLoading && (
           <KeepGoing
             suggestions={DEFAULT_SUGGESTIONS}
             onSelect={handleSelectSuggestion}
