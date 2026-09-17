@@ -1,0 +1,30 @@
+.message {
+  width: 100%;
+  margin-bottom: var(--spacing-2);
+
+  &.user {
+    align-self: flex-end;
+    background-color: var(--color-bg-muted);
+    color: var(--color-text-primary);
+    padding: var(--spacing-2-5) var(--spacing-4);
+    border-radius: var(--radius-lg);
+    max-width: 80%;
+    margin-left: auto;
+    font-size: var(--font-size-md);
+    line-height: var(--line-height-normal);
+  }
+
+  &.assistant {
+    color: var(--color-text-body);
+    font-size: var(--font-size-md);
+    line-height: var(--line-height-relaxed);
+  }
+}
+
+.paragraph {
+  margin: 0 0 var(--spacing-4) 0;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}

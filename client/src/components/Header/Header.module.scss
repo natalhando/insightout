@@ -1,0 +1,25 @@
+.header {
+  position: fixed;
+  top: 0;
+  width: 100%;
+  background-color: var(--color-bg-canvas);
+  border-bottom: var(--border-width-thin) solid var(--color-border-header);
+  z-index: 100;
+}
+
+.container {
+  max-width: var(--container-max-width);
+  margin: 0 auto;
+  padding: var(--spacing-4-5) var(--spacing-6);
+  display: flex;
+  align-items: center;
+}
+
+.title {
+  font-family: var(--font-serif);
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-regular);
+  color: var(--color-text-primary);
+  margin: 0;
+  letter-spacing: var(--letter-spacing-tight);
+}
