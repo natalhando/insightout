@@ -4,9 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 const Chart = lazy(() => import('../Chart'));
 
-const isChart = (className, value) => {
-  if (!className?.includes('language-chart')) return false;
-
+const parseChart = (value) => {
   try {
     const chart = JSON.parse(value);
     return chart.type === 'bar'
@@ -19,11 +17,24 @@ const isChart = (className, value) => {
         && item !== null
         && typeof item.label === 'string'
         && Number.isFinite(item.value)
-      ));
+      ))
+      ? chart
+      : null;
   } catch {
-    return false;
+    return null;
   }
 };
+
+const isChart = (className, value) => (
+  className?.includes('language-chart') && Boolean(parseChart(value))
+);
+
+const normalizeChartBlocks = (value) => value.split('\n').map((line) => {
+  const match = line.match(/^\s*chart\s+(\{.*\})\s*$/);
+  if (!match || !parseChart(match[1])) return line;
+
+  return `\`\`\`chart\n${match[1]}\n\`\`\``;
+}).join('\n');
 
 const Message = ({ msg, message, role, content }) => {
   const item = msg || message || { role, content };
@@ -63,7 +74,7 @@ const Message = ({ msg, message, role, content }) => {
               }
             }}
           >
-            {text}
+            {normalizeChartBlocks(text)}
           </ReactMarkdown>
         </div>
       )}

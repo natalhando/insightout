@@ -31,7 +31,6 @@ export default function Chart({ chart }) {
       }
     },
     yAxis: {
-      min: 0,
       title: { text: null },
       labels: { style: { fontSize: '12px' } }
     },
