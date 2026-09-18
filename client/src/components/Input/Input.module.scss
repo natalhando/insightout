@@ -18,13 +18,14 @@
 .form {
   width: 100%;
   display: flex;
-  padding: var(--spacing-4-5) var(--spacing-6);
+  padding: 0;
   flex-direction: column;
   max-width: var(--container-max-width);
 }
 
 .textarea {
   box-sizing: border-box;
+  width: 100%;
   min-height: 72px;
   border: 1px solid #c4c4c4;
   border-radius: 6px;

@@ -4,7 +4,7 @@
   right: 0;
   bottom: 0;
   left: 0;
-  max-width: var(--container-max-width);
+  width: min(var(--container-max-width), calc(100% - 48px));
   margin: 0 auto;
   padding: var(--spacing-7) var(--spacing-6) 240px;
   display: flex;
