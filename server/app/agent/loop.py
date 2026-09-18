@@ -55,6 +55,16 @@ Guidelines:
    ```chart
    {"type": "bar", "title": "Top Products", "data": [{"label": "Product A", "value": 100}]}
    ```
+    First identify the main takeaway the user should get from the data, and chart only when a visual makes that takeaway
+    easier to compare or spot than a concise sentence. This interface supports only vertical bar charts, so use one for
+    discrete comparisons, rankings, or a small number of ordered periods. Use a standard Markdown table with a header
+    row for exact values, many categories, or several metrics. Use prose for trends over time, composition, or any
+    question that would require another chart type.
+    A chart should add insight, not replace exact supporting details.
+    Do not chart a single value, noisy or excessively long lists, or raw data without a clear comparison. Aggregate and
+    calculate the meaningful metric first when possible, limit the result to the categories that support the takeaway,
+    and state the key insight in the surrounding text. Keep labels concise, title the chart with the metric and scope,
+    and ensure every `data` item has a string `label` and numeric `value`.
 5. Your final response must be a JSON object with exactly two fields:
     {"message": "your answer in markdown", "suggestions": ["a relevant follow-up question"]}
     The message field contains the complete answer, including any chart block. The suggestions field

@@ -8,10 +8,9 @@ import HighchartsReactModule from 'highcharts-react-official';
 const HighchartsReact = HighchartsReactModule.default || HighchartsReactModule;
 
 const Chart = ({ chart }) => {
-  const isPie = chart.type === 'pie';
   const options = {
     chart: {
-      type: isPie ? 'pie' : 'bar',
+      type: 'column',
       backgroundColor: 'transparent',
       height: 360,
       spacing: [12, 0, 12, 0]
@@ -23,40 +22,33 @@ const Chart = ({ chart }) => {
     },
     credits: { enabled: false },
     tooltip: {
-      pointFormat: isPie ? '<b>{point.y}</b>' : '<b>{point.y}</b>'
+      pointFormat: '<b>{point.y}</b>'
     },
-    xAxis: isPie ? undefined : {
+    xAxis: {
       categories: chart.data.map((item) => item.label),
       title: { text: null },
-      labels: { style: { fontSize: '12px' } }
+      labels: {
+        autoRotation: [-45, -90],
+        style: { fontSize: '12px' }
+      }
     },
-    yAxis: isPie ? undefined : {
+    yAxis: {
       min: 0,
       title: { text: null },
       labels: { style: { fontSize: '12px' } }
     },
-    legend: { enabled: isPie },
+    legend: { enabled: false },
     plotOptions: {
-      bar: {
+      column: {
         color: '#111827',
         borderRadius: 5,
         pointPadding: 0.12,
         groupPadding: 0.08
-      },
-      pie: {
-        allowPointSelect: true,
-        cursor: 'pointer',
-        dataLabels: {
-          enabled: true,
-          format: '{point.name}: {point.percentage:.1f}%'
-        }
       }
     },
     series: [{
-      name: isPie ? chart.title : 'Value',
-      data: isPie
-        ? chart.data.map((item) => ({ name: item.label, y: Number(item.value) }))
-        : chart.data.map((item) => Number(item.value))
+      name: 'Value',
+      data: chart.data.map((item) => Number(item.value))
     }]
   };
 
@@ -72,8 +64,9 @@ const isChart = (className, value) => {
 
   try {
     const chart = JSON.parse(value);
-    return (chart.type === 'bar' || chart.type === 'pie')
+    return chart.type === 'bar'
       && typeof chart.title === 'string'
+      && chart.title.trim().length > 0
       && Array.isArray(chart.data)
       && chart.data.length > 0
       && chart.data.every((item) => (
