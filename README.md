@@ -11,12 +11,39 @@ InsightOut is an AI-assisted analytics chat application for exploring ecommerce 
 
 ## Frontend commands
 
+Run these commands from the repository root, the folder containing
+`package.json`:
+
 ```bash
 npm install
 npm run dev
 npm run build
 npm run lint
 ```
+
+For local development, create `client/.env.local` with:
+
+```dotenv
+VITE_API_URL=http://localhost:8000
+```
+
+Run the backend from the repository root in one terminal. Activate the Python
+virtual environment first; it is only needed for the backend:
+
+```bash
+.\.venv\Scripts\Activate.ps1
+python -m uvicorn app.main:app --app-dir server --reload
+```
+
+In a second terminal, also opened at the repository root, run the frontend
+without activating the Python virtual environment:
+
+```bash
+npm run dev
+```
+
+Netlify uses its own `VITE_API_URL` value pointing to the deployed Cloud Run
+backend, so local development and production can use the same code safely.
 
 ## Backend setup
 
@@ -40,12 +67,3 @@ Set `GEMINI_API_KEY` in `.env`. The example also points
 `GOOGLE_APPLICATION_CREDENTIALS` at `./gcp-key.json`; the application uses
 that path by default.
 
-Run the API from the repository root with:
-
-```bash
-python -m uvicorn app.main:app --app-dir server --reload
-```
-
-With the backend running, open the Vite URL shown by `npm run dev`. Set
-`VITE_API_URL` in `client/.env.local` if the API is not running at
-`http://localhost:8000`.
