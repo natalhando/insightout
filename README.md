@@ -2,6 +2,8 @@
 
 InsightOut is an AI-assisted analytics chat application for exploring ecommerce data.
 
+**Live app:** [insightoutai.netlify.app](https://insightoutai.netlify.app/)
+
 ## Structure
 
 - `client/` - React frontend served by Vite
