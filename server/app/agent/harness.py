@@ -56,6 +56,25 @@ class QualityReport:
         return not self.issues
 
 
+USER_FACING_FAILURES: dict[QualityIssueCode, str] = {
+    "tool_error": "It seems I don't have the right tools to answer that question right now. Is there anything else I can help you with?",
+    "missing_query": "I couldn't verify an answer from the available data. Could you try asking about a metric, product, customer, or trend?",
+    "empty_answer": "I wasn't able to produce an answer this time. Please try asking again.",
+    "suggestion_count": "I couldn't finish formatting that answer. Please try asking again.",
+    "invalid_chart_json": "I couldn't format the visual for that answer. Please try asking again.",
+    "unsupported_chart": "I couldn't create a supported visual for that answer. Please try asking again.",
+    "invalid_chart_data": "I couldn't validate the visual data for that answer. Please try asking again.",
+}
+
+
+def _failure_message(report: QualityReport) -> str:
+    for issue in report.issues:
+        message = USER_FACING_FAILURES.get(issue.code)
+        if message:
+            return message
+    return "I wasn't able to verify that answer. Please try asking again."
+
+
 def _validate_chart_payload(chart: object) -> list[QualityIssue]:
     issues: list[QualityIssue] = []
     if not isinstance(chart, dict) or chart.get("type") != "bar":
@@ -143,8 +162,7 @@ def run_with_quality_harness(
             issue_text = "; ".join(issue.message for issue in last_report.issues)
             current_messages.append(ChatMessage(role="user", content=REPAIR_PROMPT.format(issues=issue_text)))
 
-    issue_codes = ", ".join(issue.code for issue in last_report.issues)
     return {
-        "message": f"I couldn't produce a verified answer for this question ({issue_codes}).",
+        "message": _failure_message(last_report),
         "suggestions": [],
     }

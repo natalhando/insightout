@@ -67,6 +67,22 @@ def test_validate_answer_does_not_accept_data_answer_after_query_error():
     assert any(issue.code == "tool_error" for issue in report.issues)
 
 
+def test_quality_harness_returns_human_readable_tool_failure(monkeypatch):
+    def failing_agent(messages, on_activity, trace):
+        trace.tool_calls.append(ToolCallTrace("execute_sql_query", {"sql_query": "SELECT 1"}, '{"error":"query failed"}'))
+        return {"message": "There were 100 users.", "suggestions": ["Compare dates?"]}
+
+    monkeypatch.setattr(harness, "run_agentic_loop", failing_agent)
+
+    result = harness.run_with_quality_harness([ChatMessage(role="user", content="How many users?")])
+
+    assert result["message"] == (
+        "It seems I don't have the right tools to answer that question right now. "
+        "Is there anything else I can help you with?"
+    )
+    assert "tool_error" not in result["message"]
+
+
 def test_quality_harness_repairs_once_before_returning_answer(monkeypatch):
     attempts = []
 
