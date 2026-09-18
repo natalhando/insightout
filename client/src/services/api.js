@@ -10,10 +10,15 @@ export const ACTIVITY_LABELS = {
 export const DEFAULT_ACTIVITY = ACTIVITY_LABELS.thinking;
 
 export async function postChat(messages, onActivity) {
+  const requestMessages = messages.map(({ role, content }) => ({
+    role: role === 'assistant' ? 'model' : role,
+    content,
+  }));
+
   const response = await fetch(`${API_URL}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ messages }),
+    body: JSON.stringify({ messages: requestMessages }),
   });
 
   if (!response.ok) {
