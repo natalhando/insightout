@@ -1,6 +1,7 @@
 import json
 import os
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass, field
 from typing import Literal, TypedDict
 
 from app.agent.tools import TOOL_MAP, TOOLS
@@ -17,6 +18,22 @@ FALLBACK_MODELS = ("gemini-3.5-flash", "gemini-3.6-flash")
 DEFAULT_MODEL = "gemini-3.5-flash-lite"
 ActivityCode = Literal["thinking", "reviewing", "schema", "query", "tool", "answer"]
 ActivityCallback = Callable[[ActivityCode], None]
+
+
+@dataclass
+class ToolCallTrace:
+    name: str
+    args: dict[str, object]
+    result: str
+
+
+@dataclass
+class AgentTrace:
+    turns: int = 0
+    model_attempts: list[str] = field(default_factory=list)
+    activities: list[ActivityCode] = field(default_factory=list)
+    tool_calls: list[ToolCallTrace] = field(default_factory=list)
+    termination_reason: str | None = None
 
 
 class ChatResult(TypedDict):
@@ -85,6 +102,7 @@ def generate_with_fallback(
     client: genai.Client,
     contents: Sequence[types.Content],
     config: types.GenerateContentConfig,
+    trace: AgentTrace | None = None,
 ) -> types.GenerateContentResponse:
     """Attempts generation with primary model, falling back if experiencing 503 capacity spikes."""
     candidate_models = (
@@ -95,6 +113,8 @@ def generate_with_fallback(
     last_error = None
 
     for model_name in unique_models:
+        if trace is not None:
+            trace.model_attempts.append(model_name)
         try:
             return client.models.generate_content(
                 model=model_name,
@@ -116,6 +136,7 @@ def generate_with_fallback(
 def execute_tool_calls(
     response: types.GenerateContentResponse,
     on_activity: ActivityCallback | None = None,
+    trace: AgentTrace | None = None,
 ) -> list[types.Content]:
     tool_history: list[types.Content] = []
     if response.candidates and response.candidates[0].content:
@@ -128,8 +149,10 @@ def execute_tool_calls(
             "get_ga4_schema": "schema",
             "execute_sql_query": "query",
         }.get(fn_name, "tool")
-        emit_activity(on_activity, activity)
+        emit_activity(on_activity, activity, trace)
         result_str = TOOL_MAP[fn_name](**fn_args) if fn_name in TOOL_MAP else json.dumps({"error": f"Unknown tool {fn_name}"})
+        if trace is not None:
+            trace.tool_calls.append(ToolCallTrace(name=fn_name, args=dict(fn_args), result=result_str))
         tool_history.append(
             types.Content(
                 role="user",
@@ -144,7 +167,13 @@ def execute_tool_calls(
     return tool_history
 
 
-def emit_activity(callback: ActivityCallback | None, activity: ActivityCode) -> None:
+def emit_activity(
+    callback: ActivityCallback | None,
+    activity: ActivityCode,
+    trace: AgentTrace | None = None,
+) -> None:
+    if trace is not None:
+        trace.activities.append(activity)
     if callback is not None:
         callback(activity)
 
@@ -172,6 +201,7 @@ def parse_agent_response(response_text: str) -> ChatResult:
 def run_agentic_loop(
     messages: list[ChatMessage],
     on_activity: ActivityCallback | None = None,
+    trace: AgentTrace | None = None,
 ) -> ChatResult:
     """Executes the loop: User Prompt -> Gemini -> Tool Execution -> Loop -> Final Answer."""
     client = get_client()
@@ -185,21 +215,28 @@ def run_agentic_loop(
     )
 
     for turn in range(MAX_AGENT_TURNS):
-        emit_activity(on_activity, "thinking" if turn == 0 else "reviewing")
+        if trace is not None:
+            trace.turns = turn + 1
+        emit_activity(on_activity, "thinking" if turn == 0 else "reviewing", trace)
         response = generate_with_fallback(
             client=client,
             contents=contents,
             config=config,
+            trace=trace,
         )
 
         if response.function_calls:
-            contents.extend(execute_tool_calls(response, on_activity))
+            contents.extend(execute_tool_calls(response, on_activity, trace))
             continue
 
         if response.text:
-            emit_activity(on_activity, "answer")
+            if trace is not None:
+                trace.termination_reason = "answer"
+            emit_activity(on_activity, "answer", trace)
             return parse_agent_response(response.text)
 
+    if trace is not None:
+        trace.termination_reason = "max_turns"
     return {
         "message": "Reached maximum turn limit without completing analysis.",
         "suggestions": [],

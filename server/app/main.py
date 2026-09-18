@@ -5,7 +5,8 @@ from collections.abc import AsyncIterator
 from queue import Queue
 from typing import Literal, TypedDict
 
-from app.agent.loop import ActivityCode, ChatMessage, ChatResult, run_agentic_loop
+from app.agent.harness import run_with_quality_harness as run_agentic_loop
+from app.agent.loop import ActivityCode, ChatMessage, ChatResult
 from dotenv import find_dotenv, load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware

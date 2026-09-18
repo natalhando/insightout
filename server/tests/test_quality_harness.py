@@ -1,0 +1,55 @@
+import json
+
+from app.agent import harness
+from app.agent.loop import AgentTrace, ChatMessage, ToolCallTrace
+
+
+def test_validate_answer_requires_query_support_for_data_questions():
+    report = harness.validate_answer(
+        "How many users?",
+        {"message": "There were 100 users.", "suggestions": ["Compare devices?", "Compare dates?"]},
+        AgentTrace(),
+    )
+
+    assert report.passed is False
+    assert [issue.code for issue in report.issues] == ["missing_query"]
+
+
+def test_validate_answer_rejects_tool_errors_and_invalid_charts():
+    trace = AgentTrace(
+        tool_calls=[
+            ToolCallTrace(
+                name="execute_sql_query",
+                args={"sql_query": "SELECT 1"},
+                result=json.dumps({"error": "BigQuery query failed."}),
+            )
+        ]
+    )
+    answer = {
+        "message": "```chart\n{\"type\":\"line\",\"data\":[]}\n```",
+        "suggestions": ["Try again?", "Compare dates?"],
+    }
+
+    report = harness.validate_answer("What is revenue?", answer, trace)
+
+    assert report.passed is False
+    assert {issue.code for issue in report.issues} == {"tool_error", "unsupported_chart"}
+
+
+def test_quality_harness_repairs_once_before_returning_answer(monkeypatch):
+    attempts = []
+
+    def fake_agent(messages, on_activity, trace):
+        attempts.append(messages[-1].content)
+        if len(attempts) == 1:
+            return {"message": "Unsupported answer", "suggestions": ["Only one"]}
+        trace.tool_calls.append(ToolCallTrace("execute_sql_query", {"sql_query": "SELECT 1"}, '{"data":[{"value":1}]}'))
+        return {"message": "Verified answer", "suggestions": ["Compare dates?", "Compare devices?"]}
+
+    monkeypatch.setattr(harness, "run_agentic_loop", fake_agent)
+
+    result = harness.run_with_quality_harness([ChatMessage(role="user", content="What is revenue?")])
+
+    assert result["message"] == "Verified answer"
+    assert len(attempts) == 2
+    assert "failed a quality check" in attempts[1]

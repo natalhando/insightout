@@ -67,3 +67,16 @@ Set `GEMINI_API_KEY` in `.env`. The example also points
 `GOOGLE_APPLICATION_CREDENTIALS` at `./gcp-key.json`; the application uses
 that path by default.
 
+## Backend tests
+
+Install the development dependencies and run the agent loop, tool, and quality
+harness tests with:
+
+```bash
+pip install -r server/requirements-dev.txt
+PYTHONPATH=server python -m pytest server/tests
+```
+
+On Windows PowerShell, set the package path with
+`$env:PYTHONPATH="server"` before running the test command.
+
