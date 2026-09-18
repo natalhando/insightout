@@ -1,10 +1,3 @@
-# React + Vite
-
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
-
-Currently, two official plugins are available:
-
-
 # InsightOut
 
 InsightOut is an AI-assisted analytics chat application for exploring ecommerce data.
@@ -25,8 +18,32 @@ npm run lint
 
 ## Backend setup
 
-Install the dependencies from `server/requirements.txt`, copy `.env.example` to `.env`, and provide the required API credentials. Run the API from the repository root with:
+The backend uses Gemini for the agent and the public GA4 BigQuery dataset for
+data. Create a Google Cloud service account with permission to run BigQuery
+jobs, download its JSON key to the repository root as `gcp-key.json`, and make
+sure billing is enabled on the project. The dataset itself is public, but
+BigQuery still needs a project and credentials to execute queries.
+
+Install the dependencies and create a repository-level `.env` from
+`.env.example`:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate              # Windows: .venv\Scripts\Activate.ps1
+pip install -r server/requirements.txt
+cp .env.example .env                   # Windows: Copy-Item .env.example .env
+```
+
+Set `GEMINI_API_KEY` in `.env`. The example also points
+`GOOGLE_APPLICATION_CREDENTIALS` at `./gcp-key.json`; the application uses
+that path by default.
+
+Run the API from the repository root with:
 
 ```bash
 python -m uvicorn app.main:app --app-dir server --reload
 ```
+
+With the backend running, open the Vite URL shown by `npm run dev`. Set
+`VITE_API_URL` in `client/.env.local` if the API is not running at
+`http://localhost:8000`.
