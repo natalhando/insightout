@@ -20,7 +20,8 @@ WRITE_KEYWORDS = re.compile(
 
 
 def get_bigquery_client() -> bigquery.Client:
-    os.environ.setdefault("GOOGLE_APPLICATION_CREDENTIALS", KEY_PATH)
+    if "GOOGLE_APPLICATION_CREDENTIALS" not in os.environ and os.path.exists(KEY_PATH):
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = KEY_PATH
     return bigquery.Client()
 
 
