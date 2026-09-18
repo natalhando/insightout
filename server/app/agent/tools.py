@@ -7,24 +7,14 @@ from google.cloud import bigquery
 
 logger = logging.getLogger(__name__)
 
-# Force Python to point to the key inside the server directory when it is needed.
-KEY_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "gcp-key.json")
+KEY_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "gcp-key.json"))
 GA4_DATASET = "bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*"
-GA4_TABLE = f"`{GA4_DATASET}`"
 MAX_RESULT_ROWS = 50
-
-_bq_client = None
 
 
 def get_bigquery_client() -> bigquery.Client:
-    global _bq_client
-    if _bq_client is None:
-        os.environ.setdefault("GOOGLE_APPLICATION_CREDENTIALS", os.path.abspath(KEY_PATH))
-        _bq_client = bigquery.Client()
-    return _bq_client
-
-
-bq_client = get_bigquery_client()
+    os.environ.setdefault("GOOGLE_APPLICATION_CREDENTIALS", KEY_PATH)
+    return bigquery.Client()
 
 
 class BigQueryRepository:
@@ -37,20 +27,16 @@ class BigQueryRepository:
 
         try:
             query_job = self.client.query(sql_query)
-            results = query_job.result()
-            rows = [dict(row) for row in islice(results, MAX_RESULT_ROWS)]
+            rows = [dict(row) for row in islice(query_job.result(), MAX_RESULT_ROWS)]
             return json.dumps({"data": rows, "row_count": len(rows)})
         except (TypeError, ValueError) as exc:
             return json.dumps({"error": str(exc)})
-        except Exception as exc:  # pragma: no cover - logging boundary for operational failures
+        except Exception:
             logger.exception("BigQuery query failed")
-            return json.dumps({"error": str(exc)})
+            return json.dumps({"error": "BigQuery query failed."})
 
 
 def get_ga4_schema() -> str:
-    """Returns the main schema fields and description for the BigQuery GA4 e-commerce dataset.
-    Call this first to understand how to write SQL queries for the user.
-    """
     schema_info = {
         "dataset": GA4_DATASET,
         "common_fields": [
@@ -70,19 +56,17 @@ def get_ga4_schema() -> str:
     return json.dumps(schema_info)
 
 
-def execute_sql_query(sql_query: str, repository: BigQueryRepository | None = None) -> str:
-    """Executes a read-only SQL query against BigQuery and returns up to 50 rows of results as JSON."""
-    if repository is None:
-        repo = BigQueryRepository(client=bq_client)
-    else:
-        repo = repository
+def _execute_sql_query(sql_query: str, repository: BigQueryRepository | None = None) -> str:
+    repo = repository or BigQueryRepository()
     return repo.execute_read_query(sql_query)
 
 
-# List of tools to pass to Gemini
-TOOLS = [get_ga4_schema, execute_sql_query]
-# Dictionary map for string execution lookup
+def execute_sql_query(sql_query: str) -> str:
+    return _execute_sql_query(sql_query)
+
+
 TOOL_MAP = {
     "get_ga4_schema": get_ga4_schema,
     "execute_sql_query": execute_sql_query,
 }
+TOOLS = list(TOOL_MAP.values())

@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useChat } from './hooks/useChat';
 import { Header } from './components/Header';
 import { Layout } from './components/Layout';
-import { Chat } from './components/Chat';
 import { Message } from './components/Message';
 import { KeepGoing } from './components/KeepGoing';
 import { EmptyState } from './components/EmptyState';
@@ -20,6 +19,7 @@ export default function App() {
   const { messages, sendMessage, isLoading, error } = useChat();
   const [input, setInput] = useState('');
   const latestAssistantMessage = [...messages].reverse().find((msg) => msg.role === 'assistant');
+  const followUpSuggestions = latestAssistantMessage?.suggestions ?? [];
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -37,42 +37,36 @@ export default function App() {
       <Header />
 
       <Layout>
-        {/* Suggested initial queries */}
-        {messages.length == 0 && (
+        {messages.length === 0 && (
           <EmptyState
             suggestions={DEFAULT_SUGGESTIONS}
             onSelect={handleSelectSuggestion}
           />
         )}
 
-        {/* Conversation messages */}
-        <Chat>
-          {messages.map((msg, index) => (
-            <Message key={index} message={msg} />
-          ))}
-          {isLoading && <Loader />}
-        </Chat>
+        {messages.map((msg, index) => (
+          <Message key={`${msg.role}-${index}`} message={msg} />
+        ))}
 
-        {/* Suggested follow-up queries */}
+        {isLoading && <Loader />}
+
         {messages.length > 0 && !isLoading && (
           <KeepGoing
-            suggestions={latestAssistantMessage?.suggestions}
+            suggestions={followUpSuggestions}
             onSelect={handleSelectSuggestion}
           />
         )}
 
-        {/* Error display */}
         {error && <ErrorBanner error={error} />}
-
       </Layout>
-        {/* Query input form */}
-        <Input
-          input={input}
-          setInput={setInput}
-          handleSubmit={handleSubmit}
-          isLoading={isLoading}
-          placeholder="Ask about the orders table..."
-        />
+
+      <Input
+        input={input}
+        setInput={setInput}
+        handleSubmit={handleSubmit}
+        isLoading={isLoading}
+        placeholder="Ask about the orders table..."
+      />
     </>
   );
 }
