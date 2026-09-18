@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 from itertools import islice
 
 from google.cloud import bigquery
@@ -10,6 +11,12 @@ logger = logging.getLogger(__name__)
 KEY_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "gcp-key.json"))
 GA4_DATASET = "bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*"
 MAX_RESULT_ROWS = 50
+READ_QUERY_START = re.compile(r"^(?:SELECT|WITH)\b", re.IGNORECASE)
+QUOTED_SQL_TEXT = re.compile(r"'(?:''|\\.|[^'])*'|\"(?:\\.|[^\"])*\"|`[^`]*`")
+WRITE_KEYWORDS = re.compile(
+    r"\b(?:ALTER|CALL|CREATE|DELETE|DROP|EXPORT|GRANT|INSERT|MERGE|REVOKE|TRUNCATE|UPDATE)\b",
+    re.IGNORECASE,
+)
 
 
 def get_bigquery_client() -> bigquery.Client:
@@ -22,11 +29,20 @@ class BigQueryRepository:
         self.client = client or get_bigquery_client()
 
     def execute_read_query(self, sql_query: str) -> str:
-        if not sql_query.strip().upper().startswith("SELECT"):
+        normalized_query = sql_query.strip()
+        query_without_trailing_semicolon = normalized_query[:-1].rstrip() if normalized_query.endswith(";") else normalized_query
+        has_multiple_statements = ";" in query_without_trailing_semicolon
+        query_without_quoted_text = QUOTED_SQL_TEXT.sub(" ", query_without_trailing_semicolon)
+
+        if (
+            not READ_QUERY_START.match(normalized_query)
+            or has_multiple_statements
+            or WRITE_KEYWORDS.search(query_without_quoted_text)
+        ):
             return json.dumps({"error": "Only SELECT queries are allowed."})
 
         try:
-            query_job = self.client.query(sql_query)
+            query_job = self.client.query(normalized_query)
             rows = [dict(row) for row in islice(query_job.result(), MAX_RESULT_ROWS)]
             return json.dumps({"data": rows, "row_count": len(rows)})
         except (TypeError, ValueError) as exc:
