@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict
 load_dotenv(find_dotenv())
 
 _client = None
-MAX_AGENT_TURNS = 5
+MAX_AGENT_TURNS = 8
 FALLBACK_MODELS = ("gemini-3.5-flash", "gemini-3.6-flash")
 DEFAULT_MODEL = "gemini-3.5-flash-lite"
 ActivityCode = Literal["thinking", "reviewing", "schema", "query", "tool", "answer"]
