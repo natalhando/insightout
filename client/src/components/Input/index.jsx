@@ -23,7 +23,6 @@ const Input = ({
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={placeholder}
-            disabled={isLoading}
             className={styles.textarea}
             rows={3}
           />
