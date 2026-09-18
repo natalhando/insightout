@@ -6,6 +6,7 @@ from app.agent.tools import (
     get_ga4_schema,
 )
 from fixtures import FakeBigQueryClient, decode
+from google.api_core.exceptions import BadRequest
 
 
 def test_rejects_non_read_queries_and_multiple_statements_without_calling_bigquery():
@@ -50,6 +51,34 @@ def test_returns_expected_errors_for_client_failures():
 
     assert type_error_result == {"error": "bad query"}
     assert runtime_error_result == {"error": "BigQuery query failed."}
+
+
+def test_returns_bigquery_validation_details_for_bad_requests():
+    error = BadRequest("Values referenced in UNNEST must be arrays")
+
+    result = decode(BigQueryRepository(FakeBigQueryClient(error=error)).execute_read_query("SELECT 1"))
+
+    assert result == {"error": "BigQuery rejected the query: 400 Values referenced in UNNEST must be arrays"}
+
+
+def test_rejects_struct_fields_passed_to_unnest_before_calling_bigquery():
+    client = FakeBigQueryClient()
+    repository = BigQueryRepository(client)
+
+    result = decode(repository.execute_read_query("SELECT * FROM events, UNNEST(param.value) AS value"))
+
+    assert result["error"].startswith("Invalid UNNEST operand:")
+    assert client.queries == []
+
+
+def test_rejects_indexed_ga4_structs_passed_to_unnest():
+    client = FakeBigQueryClient()
+    repository = BigQueryRepository(client)
+
+    result = decode(repository.execute_read_query("SELECT * FROM events, UNNEST(event_params[OFFSET(0)])"))
+
+    assert result["error"].startswith("Invalid UNNEST operand:")
+    assert client.queries == []
 
 
 def test_schema_and_tool_wrappers_return_json_and_forward_repository():

@@ -36,6 +36,27 @@ def test_validate_answer_rejects_tool_errors_and_invalid_charts():
     assert {issue.code for issue in report.issues} == {"tool_error", "unsupported_chart"}
 
 
+def test_validate_answer_does_not_accept_data_answer_after_query_error():
+    trace = AgentTrace(
+        tool_calls=[
+            ToolCallTrace(
+                "execute_sql_query",
+                {"sql_query": "SELECT event_name, COUNT(*) FROM events"},
+                '{"error":"BigQuery rejected the query: SELECT list expression references column event_name"}',
+            )
+        ]
+    )
+
+    report = harness.validate_answer(
+        "How many events were there?",
+        {"message": "There were 100 events.", "suggestions": ["Compare dates?", "Compare devices?"]},
+        trace,
+    )
+
+    assert report.passed is False
+    assert any(issue.code == "tool_error" for issue in report.issues)
+
+
 def test_quality_harness_repairs_once_before_returning_answer(monkeypatch):
     attempts = []
 

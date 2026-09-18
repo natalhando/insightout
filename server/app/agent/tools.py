@@ -4,6 +4,7 @@ import os
 import re
 from itertools import islice
 
+from google.api_core.exceptions import BadRequest
 from google.cloud import bigquery
 
 logger = logging.getLogger(__name__)
@@ -11,10 +12,17 @@ logger = logging.getLogger(__name__)
 KEY_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "gcp-key.json"))
 GA4_DATASET = "bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*"
 MAX_RESULT_ROWS = 50
+MAX_QUERY_ERROR_LENGTH = 500
 READ_QUERY_START = re.compile(r"^(?:SELECT|WITH)\b", re.IGNORECASE)
 QUOTED_SQL_TEXT = re.compile(r"'(?:''|\\.|[^'])*'|\"(?:\\.|[^\"])*\"|`[^`]*`")
 WRITE_KEYWORDS = re.compile(
     r"\b(?:ALTER|CALL|CREATE|DELETE|DROP|EXPORT|GRANT|INSERT|MERGE|REVOKE|TRUNCATE|UPDATE)\b",
+    re.IGNORECASE,
+)
+INVALID_UNNEST_OPERAND = re.compile(
+    r"\bUNNEST\s*\(\s*(?:[A-Za-z_]\w*\s*\.\s*"
+    r"(?:key|value|string_value|int_value|float_value)|"
+    r"(?:event_params|items)\s*\[[^]]+\])\s*\)",
     re.IGNORECASE,
 )
 
@@ -31,6 +39,9 @@ class BigQueryRepository:
         self.client = client or get_bigquery_client()
 
     def execute_read_query(self, sql_query: str) -> str:
+        if not isinstance(sql_query, str):
+            return json.dumps({"error": "SQL query must be a string."})
+
         normalized_query = sql_query.strip()
         query_without_trailing_semicolon = normalized_query[:-1].rstrip() if normalized_query.endswith(";") else normalized_query
         has_multiple_statements = ";" in query_without_trailing_semicolon
@@ -42,6 +53,15 @@ class BigQueryRepository:
             or WRITE_KEYWORDS.search(query_without_quoted_text)
         ):
             return json.dumps({"error": "Only SELECT queries are allowed."})
+        if INVALID_UNNEST_OPERAND.search(query_without_quoted_text):
+            return json.dumps(
+                {
+                    "error": (
+                        "Invalid UNNEST operand: UNNEST must receive an array field such as "
+                        "event_params or items, not a struct field like param.value."
+                    )
+                }
+            )
 
         try:
             query_job = self.client.query(normalized_query)
@@ -49,6 +69,9 @@ class BigQueryRepository:
             return json.dumps({"data": rows, "row_count": len(rows)})
         except (TypeError, ValueError) as exc:
             return json.dumps({"error": str(exc)})
+        except BadRequest as exc:
+            message = str(exc).strip().replace("\n", " ")
+            return json.dumps({"error": f"BigQuery rejected the query: {message[:MAX_QUERY_ERROR_LENGTH]}"})
         except Exception:
             logger.exception("BigQuery query failed")
             return json.dumps({"error": "BigQuery query failed."})
