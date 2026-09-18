@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useChat } from './hooks/useChat';
 import { Header } from './components/Header';
 import { Layout } from './components/Layout';
@@ -18,8 +18,13 @@ const DEFAULT_SUGGESTIONS = [
 export default function App() {
   const { messages, sendMessage, isLoading, activity, error } = useChat();
   const [input, setInput] = useState('');
+  const messagesEndRef = useRef(null);
   const latestAssistantMessage = [...messages].reverse().find((msg) => msg.role === 'assistant');
   const followUpSuggestions = latestAssistantMessage?.suggestions ?? [];
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, isLoading]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -58,6 +63,8 @@ export default function App() {
         )}
 
         {error && <ErrorBanner error={error} />}
+
+        <div ref={messagesEndRef} aria-hidden="true" />
       </Layout>
 
       <Input
