@@ -1,13 +1,27 @@
-import os
 import json
-from dotenv import load_dotenv, find_dotenv
+import os
+from collections.abc import Sequence
+from typing import Literal
+
+from app.agent.tools import TOOL_MAP, TOOLS
+from dotenv import find_dotenv, load_dotenv
 from google import genai
 from google.genai import types
-from app.agent.tools import TOOLS, TOOL_MAP
+from pydantic import BaseModel, ConfigDict
 
 load_dotenv(find_dotenv())
 
 _client = None
+MAX_AGENT_TURNS = 5
+FALLBACK_MODELS = ("gemini-3.5-flash", "gemini-3.6-flash")
+DEFAULT_MODEL = "gemini-3.5-flash-lite"
+
+
+class ChatMessage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    role: Literal["user", "model"]
+    content: str
+
 
 def get_client() -> genai.Client:
     global _client
@@ -20,6 +34,7 @@ def get_client() -> genai.Client:
             )
         _client = genai.Client(api_key=api_key)
     return _client
+
 
 SYSTEM_INSTRUCTION = """
 You are InsightOut, an expert E-commerce Analytics AI assistant.
@@ -40,13 +55,25 @@ Guidelines:
     Return only the JSON object, without a markdown fence or other text.
    """
 
-def generate_with_fallback(client: genai.Client, contents: list, config: types.GenerateContentConfig):
+
+def build_contents(messages: Sequence[ChatMessage]) -> list[types.Content]:
+    contents: list[types.Content] = []
+    for msg in messages:
+        role = "user" if msg.role == "user" else "model"
+        contents.append(types.Content(role=role, parts=[types.Part.from_text(text=msg.content)]))
+    return contents
+
+
+def generate_with_fallback(
+    client: genai.Client,
+    contents: Sequence[types.Content],
+    config: types.GenerateContentConfig,
+) -> types.GenerateContentResponse:
     """Attempts generation with primary model, falling back if experiencing 503 capacity spikes."""
-    candidate_models = [
-        os.environ.get("GEMINI_MODEL", "gemini-3.5-flash-lite"),
-        "gemini-3.5-flash",
-        "gemini-3.6-flash",
-    ]
+    candidate_models = (
+        os.environ.get("GEMINI_MODEL", DEFAULT_MODEL),
+        *FALLBACK_MODELS,
+    )
     unique_models = list(dict.fromkeys(candidate_models))
     last_error = None
 
@@ -57,16 +84,42 @@ def generate_with_fallback(client: genai.Client, contents: list, config: types.G
                 contents=contents,
                 config=config,
             )
-        except Exception as e:
-            err_str = str(e)
+        except Exception as exc:  # pragma: no branch - provider-specific retries
+            err_str = str(exc)
             if "503" in err_str or "404" in err_str:
-                last_error = e
+                last_error = exc
                 continue
-            raise e
+            raise
     if last_error:
         raise last_error
 
-def parse_agent_response(response_text: str) -> dict:
+    raise RuntimeError("No Gemini model could be reached for this request.")
+
+
+def execute_tool_calls(response: types.GenerateContentResponse) -> list[types.Content]:
+    tool_history: list[types.Content] = []
+    if response.candidates and response.candidates[0].content:
+        tool_history.append(response.candidates[0].content)
+
+    for call in response.function_calls or []:
+        fn_name = call.name
+        fn_args = call.args or {}
+        result_str = TOOL_MAP[fn_name](**fn_args) if fn_name in TOOL_MAP else json.dumps({"error": f"Unknown tool {fn_name}"})
+        tool_history.append(
+            types.Content(
+                role="user",
+                parts=[
+                    types.Part.from_function_response(
+                        name=fn_name,
+                        response={"result": result_str},
+                    )
+                ],
+            )
+        )
+    return tool_history
+
+
+def parse_agent_response(response_text: str) -> dict[str, object]:
     """Normalize the model's structured response while preserving a useful fallback."""
     try:
         parsed = json.loads(response_text)
@@ -82,68 +135,37 @@ def parse_agent_response(response_text: str) -> dict:
 
     return {
         "message": parsed["message"],
-        "suggestions": [item for item in suggestions if isinstance(item, str) and item.strip()]
+        "suggestions": [item for item in suggestions if isinstance(item, str) and item.strip()],
     }
 
 
-def run_agentic_loop(messages: list) -> dict:
+def run_agentic_loop(messages: list[ChatMessage]) -> dict[str, object]:
     """Executes the loop: User Prompt -> Gemini -> Tool Execution -> Loop -> Final Answer."""
     client = get_client()
-
-    # Format chat history for SDK
-    contents = []
-    for msg in messages:
-        role = "user" if msg["role"] == "user" else "model"
-        contents.append(types.Content(role=role, parts=[types.Part.from_text(text=msg["content"])]))
+    contents = build_contents(messages)
 
     config = types.GenerateContentConfig(
         system_instruction=SYSTEM_INSTRUCTION,
         tools=TOOLS,
         automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
-        temperature=0.2
+        temperature=0.2,
     )
 
-    max_turns = 5
-    for turn in range(max_turns):
+    for _ in range(MAX_AGENT_TURNS):
         response = generate_with_fallback(
             client=client,
             contents=contents,
-            config=config
+            config=config,
         )
 
-        # Check if model requested tool execution
         if response.function_calls:
-            for call in response.function_calls:
-                fn_name = call.name
-                fn_args = call.args or {}
-
-                # Execute function locally
-                if fn_name in TOOL_MAP:
-                    result_str = TOOL_MAP[fn_name](**fn_args)
-                else:
-                    result_str = json.dumps({"error": f"Unknown tool {fn_name}"})
-
-                # Append model function call and local response back into conversation history
-                contents.append(response.candidates[0].content)
-                contents.append(
-                    types.Content(
-                        role="user",
-                        parts=[
-                            types.Part.from_function_response(
-                                name=fn_name,
-                                response={"result": result_str}
-                            )
-                        ]
-                    )
-                )
-            # Continue the while loop to get model's synthesis
+            contents.extend(execute_tool_calls(response))
             continue
-        
-        # If no tool calls, return final generated answer
+
         if response.text:
             return parse_agent_response(response.text)
 
     return {
         "message": "Reached maximum turn limit without completing analysis.",
-        "suggestions": []
+        "suggestions": [],
     }
