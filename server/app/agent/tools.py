@@ -22,7 +22,8 @@ WRITE_KEYWORDS = re.compile(
 def get_bigquery_client() -> bigquery.Client:
     if "GOOGLE_APPLICATION_CREDENTIALS" not in os.environ and os.path.exists(KEY_PATH):
         os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = KEY_PATH
-    return bigquery.Client()
+    project_id = os.environ.get("BIGQUERY_PROJECT_ID")
+    return bigquery.Client(project=project_id) if project_id else bigquery.Client()
 
 
 class BigQueryRepository:
