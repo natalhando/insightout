@@ -1,10 +1,11 @@
 import { useState } from 'react';
 
-import { postChat } from '../services/api';
+import { DEFAULT_ACTIVITY, postChat } from '../services/api';
 
 export function useChat() {
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [activity, setActivity] = useState(DEFAULT_ACTIVITY);
   const [error, setError] = useState(null);
 
   const sendMessage = async (userText) => {
@@ -13,10 +14,11 @@ export function useChat() {
     const newMessages = [...messages, { role: 'user', content: userText }];
     setMessages(newMessages);
     setIsLoading(true);
+    setActivity(DEFAULT_ACTIVITY);
     setError(null);
 
     try {
-      const data = await postChat(newMessages);
+      const data = await postChat(newMessages, setActivity);
       setMessages([...newMessages, {
         role: 'assistant',
         content: data.message,
@@ -29,5 +31,5 @@ export function useChat() {
     }
   };
 
-  return { messages, sendMessage, isLoading, error };
+  return { messages, sendMessage, isLoading, activity, error };
 }

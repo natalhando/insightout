@@ -16,7 +16,7 @@ const DEFAULT_SUGGESTIONS = [
 ];
 
 export default function App() {
-  const { messages, sendMessage, isLoading, error } = useChat();
+  const { messages, sendMessage, isLoading, activity, error } = useChat();
   const [input, setInput] = useState('');
   const latestAssistantMessage = [...messages].reverse().find((msg) => msg.role === 'assistant');
   const followUpSuggestions = latestAssistantMessage?.suggestions ?? [];
@@ -48,7 +48,7 @@ export default function App() {
           <Message key={`${msg.role}-${index}`} message={msg} />
         ))}
 
-        {isLoading && <Loader />}
+        {isLoading && <Loader text={activity} />}
 
         {messages.length > 0 && !isLoading && (
           <KeepGoing

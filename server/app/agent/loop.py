@@ -1,7 +1,7 @@
 import json
 import os
-from collections.abc import Sequence
-from typing import Literal
+from collections.abc import Callable, Sequence
+from typing import Literal, TypedDict
 
 from app.agent.tools import TOOL_MAP, TOOLS
 from dotenv import find_dotenv, load_dotenv
@@ -15,6 +15,13 @@ _client = None
 MAX_AGENT_TURNS = 5
 FALLBACK_MODELS = ("gemini-3.5-flash", "gemini-3.6-flash")
 DEFAULT_MODEL = "gemini-3.5-flash-lite"
+ActivityCode = Literal["thinking", "reviewing", "schema", "query", "tool", "answer"]
+ActivityCallback = Callable[[ActivityCode], None]
+
+
+class ChatResult(TypedDict):
+    message: str
+    suggestions: list[str]
 
 
 class ChatMessage(BaseModel):
@@ -96,7 +103,10 @@ def generate_with_fallback(
     raise RuntimeError("No Gemini model could be reached for this request.")
 
 
-def execute_tool_calls(response: types.GenerateContentResponse) -> list[types.Content]:
+def execute_tool_calls(
+    response: types.GenerateContentResponse,
+    on_activity: ActivityCallback | None = None,
+) -> list[types.Content]:
     tool_history: list[types.Content] = []
     if response.candidates and response.candidates[0].content:
         tool_history.append(response.candidates[0].content)
@@ -104,6 +114,11 @@ def execute_tool_calls(response: types.GenerateContentResponse) -> list[types.Co
     for call in response.function_calls or []:
         fn_name = call.name
         fn_args = call.args or {}
+        activity = {
+            "get_ga4_schema": "schema",
+            "execute_sql_query": "query",
+        }.get(fn_name, "tool")
+        emit_activity(on_activity, activity)
         result_str = TOOL_MAP[fn_name](**fn_args) if fn_name in TOOL_MAP else json.dumps({"error": f"Unknown tool {fn_name}"})
         tool_history.append(
             types.Content(
@@ -119,7 +134,12 @@ def execute_tool_calls(response: types.GenerateContentResponse) -> list[types.Co
     return tool_history
 
 
-def parse_agent_response(response_text: str) -> dict[str, object]:
+def emit_activity(callback: ActivityCallback | None, activity: ActivityCode) -> None:
+    if callback is not None:
+        callback(activity)
+
+
+def parse_agent_response(response_text: str) -> ChatResult:
     """Normalize the model's structured response while preserving a useful fallback."""
     try:
         parsed = json.loads(response_text)
@@ -139,7 +159,10 @@ def parse_agent_response(response_text: str) -> dict[str, object]:
     }
 
 
-def run_agentic_loop(messages: list[ChatMessage]) -> dict[str, object]:
+def run_agentic_loop(
+    messages: list[ChatMessage],
+    on_activity: ActivityCallback | None = None,
+) -> ChatResult:
     """Executes the loop: User Prompt -> Gemini -> Tool Execution -> Loop -> Final Answer."""
     client = get_client()
     contents = build_contents(messages)
@@ -151,7 +174,8 @@ def run_agentic_loop(messages: list[ChatMessage]) -> dict[str, object]:
         temperature=0.2,
     )
 
-    for _ in range(MAX_AGENT_TURNS):
+    for turn in range(MAX_AGENT_TURNS):
+        emit_activity(on_activity, "thinking" if turn == 0 else "reviewing")
         response = generate_with_fallback(
             client=client,
             contents=contents,
@@ -159,10 +183,11 @@ def run_agentic_loop(messages: list[ChatMessage]) -> dict[str, object]:
         )
 
         if response.function_calls:
-            contents.extend(execute_tool_calls(response))
+            contents.extend(execute_tool_calls(response, on_activity))
             continue
 
         if response.text:
+            emit_activity(on_activity, "answer")
             return parse_agent_response(response.text)
 
     return {

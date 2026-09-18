@@ -1,9 +1,15 @@
+import asyncio
+import json
 import logging
+from collections.abc import AsyncIterator
+from queue import Queue
+from typing import Literal, TypedDict
 
-from app.agent.loop import ChatMessage, run_agentic_loop
+from app.agent.loop import ActivityCode, ChatMessage, ChatResult, run_agentic_loop
 from dotenv import find_dotenv, load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 logger = logging.getLogger(__name__)
@@ -28,15 +34,55 @@ class ChatRequest(BaseModel):
     messages: list[ChatMessage]
 
 
-@app.post("/api/chat")
-async def chat_endpoint(request: ChatRequest):
+class StatusEvent(TypedDict):
+    type: Literal["status"]
+    code: ActivityCode
+
+
+class ResultEvent(ChatResult):
+    type: Literal["result"]
+
+
+class ErrorEvent(TypedDict):
+    type: Literal["error"]
+    message: str
+
+
+StreamEvent = StatusEvent | ResultEvent | ErrorEvent
+
+
+def run_chat_request(messages: list[ChatMessage], events: Queue[StreamEvent]) -> None:
+    def on_activity(activity: ActivityCode) -> None:
+        events.put({"type": "status", "code": activity})
+
     try:
-        return run_agentic_loop(request.messages)
+        result = run_agentic_loop(messages, on_activity)
+        events.put({"type": "result", **result})
     except (TypeError, ValueError, ValidationError) as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
+        events.put({"type": "error", "message": str(exc)})
+    except Exception:
         logger.exception("Chat request failed")
-        raise HTTPException(status_code=500, detail="Unable to process chat request") from exc
+        events.put({"type": "error", "message": "Unable to process chat request"})
+
+
+def format_sse(event: StreamEvent) -> str:
+    return f"data: {json.dumps(event)}\n\n"
+
+
+async def stream_chat_events(messages: list[ChatMessage]) -> AsyncIterator[str]:
+    events: Queue[StreamEvent] = Queue()
+    task = asyncio.create_task(asyncio.to_thread(run_chat_request, messages, events))
+    while True:
+        event = await asyncio.to_thread(events.get)
+        yield format_sse(event)
+        if event["type"] in {"result", "error"}:
+            break
+    await task
+
+
+@app.post("/api/chat")
+async def chat_endpoint(request: ChatRequest) -> StreamingResponse:
+    return StreamingResponse(stream_chat_events(request.messages), media_type="text/event-stream")
 
 
 if __name__ == "__main__":
