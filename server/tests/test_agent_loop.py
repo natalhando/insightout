@@ -1,10 +1,9 @@
 import json
 
 import pytest
-from google.genai import types
-
 from app.agent import loop
 from fixtures import FakeClient, FakeModels, message, response
+from google.genai import types
 
 
 def test_chat_message_forbids_extra_fields():
@@ -73,14 +72,17 @@ def test_execute_tool_calls_emits_specific_activity_and_unknown_tool_error(monke
 
 
 def test_parse_agent_response_preserves_fallback_and_filters_suggestions():
-    assert loop.parse_agent_response("not json") == {"message": "not json", "suggestions": []}
+    assert loop.parse_agent_response("not json") == {
+        "message": "not json",
+        "suggestions": [loop.DEFAULT_SUGGESTION],
+    }
     assert loop.parse_agent_response(json.dumps({"message": "answer", "suggestions": ["next", "", 3]})) == {
         "message": "answer",
         "suggestions": ["next"],
     }
     assert loop.parse_agent_response(json.dumps({"message": "answer", "suggestions": "invalid"})) == {
         "message": "answer",
-        "suggestions": [],
+        "suggestions": [loop.DEFAULT_SUGGESTION],
     }
 
 

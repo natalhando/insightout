@@ -15,6 +15,16 @@ def test_validate_answer_requires_query_support_for_data_questions():
     assert [issue.code for issue in report.issues] == ["missing_query"]
 
 
+def test_validate_answer_allows_a_valid_answer_with_one_clickable_suggestion():
+    report = harness.validate_answer(
+        "What is the weather?",
+        {"message": "The answer is unavailable.", "suggestions": ["Show me an interesting insight"]},
+        AgentTrace(),
+    )
+
+    assert report.passed is True
+
+
 def test_validate_answer_rejects_tool_errors_and_invalid_charts():
     trace = AgentTrace(
         tool_calls=[

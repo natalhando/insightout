@@ -105,8 +105,8 @@ def validate_answer(question: str, answer: ChatResult, trace: AgentTrace) -> Qua
 
     if not isinstance(message, str) or not message.strip():
         issues.append(QualityIssue("empty_answer", "The answer must contain a non-empty message."))
-    if not isinstance(suggestions, list) or not 2 <= len(suggestions) <= 3:
-        issues.append(QualityIssue("suggestion_count", "The answer must contain two or three suggestions."))
+    if not isinstance(suggestions, list) or len(suggestions) > 3:
+        issues.append(QualityIssue("suggestion_count", "The answer may contain up to three suggestions."))
     if any(_tool_call_failed(call.result) for call in trace.tool_calls):
         issues.append(QualityIssue("tool_error", "The answer was based on a failed tool call."))
 

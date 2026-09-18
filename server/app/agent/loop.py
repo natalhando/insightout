@@ -17,6 +17,7 @@ MAX_AGENT_TURNS = 8
 FALLBACK_MODELS = ("gemini-3.5-flash", "gemini-3.6-flash")
 DEFAULT_MODEL = "gemini-3.5-flash-lite"
 AGENT_TEMPERATURE = 0.2
+DEFAULT_SUGGESTION = "Show me an interesting insight"
 ActivityCode = Literal["thinking", "reviewing", "schema", "query", "tool", "answer"]
 ActivityCallback = Callable[[ActivityCode], None]
 TerminationReason = Literal["answer", "max_turns"]
@@ -92,7 +93,7 @@ Final response contract:
 - Your final response must be a JSON object with exactly two fields:
   {"message": "your answer in markdown", "suggestions": ["a relevant follow-up question"]}
 - The `message` field contains the complete answer, including any chart block.
-- The `suggestions` field contains 2-3 concise questions that naturally follow from the user's previous message and your answer.
+- The `suggestions` field may contain up to 3 concise questions that naturally follow from the user's previous message and your answer.
 - Return only the JSON object, without a markdown fence or any other text.
 """
 
@@ -190,18 +191,21 @@ def parse_agent_response(response_text: str) -> ChatResult:
     try:
         parsed = json.loads(response_text)
     except json.JSONDecodeError:
-        return {"message": response_text, "suggestions": []}
+        return {"message": response_text, "suggestions": [DEFAULT_SUGGESTION]}
 
     if not isinstance(parsed, dict) or not isinstance(parsed.get("message"), str):
-        return {"message": response_text, "suggestions": []}
+        return {"message": response_text, "suggestions": [DEFAULT_SUGGESTION]}
 
     suggestions = parsed.get("suggestions", [])
     if not isinstance(suggestions, list):
         suggestions = []
+    suggestions = [item for item in suggestions if isinstance(item, str) and item.strip()]
+    if not suggestions:
+        suggestions = [DEFAULT_SUGGESTION]
 
     return {
         "message": parsed["message"],
-        "suggestions": [item for item in suggestions if isinstance(item, str) and item.strip()],
+        "suggestions": suggestions,
     }
 
 
