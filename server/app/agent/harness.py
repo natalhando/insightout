@@ -1,9 +1,17 @@
 import json
+import math
 import re
 from dataclasses import dataclass
-from numbers import Number
+from numbers import Real
+from typing import Literal
 
-from app.agent.loop import AgentTrace, ChatMessage, ChatResult, run_agentic_loop
+from app.agent.loop import (
+    ActivityCallback,
+    AgentTrace,
+    ChatMessage,
+    ChatResult,
+    run_agentic_loop,
+)
 
 CHART_PATTERN = re.compile(r"```chart\s*(\{.*?\})\s*```", re.DOTALL)
 DATA_QUESTION_TERMS = (
@@ -22,11 +30,20 @@ DATA_QUESTION_TERMS = (
 )
 REPAIR_PROMPT = """Your previous response failed a quality check: {issues}
 Re-run the analysis as needed and return only the required JSON response. Use a read-only SQL query when the answer depends on data, and do not make claims unsupported by the tool results."""
+QualityIssueCode = Literal[
+    "empty_answer",
+    "suggestion_count",
+    "tool_error",
+    "missing_query",
+    "invalid_chart_json",
+    "unsupported_chart",
+    "invalid_chart_data",
+]
 
 
 @dataclass
 class QualityIssue:
-    code: str
+    code: QualityIssueCode
     message: str
 
 
@@ -39,33 +56,37 @@ class QualityReport:
         return not self.issues
 
 
-def _validate_chart(message: str) -> list[QualityIssue]:
+def _validate_chart_payload(chart: object) -> list[QualityIssue]:
     issues: list[QualityIssue] = []
-    match = CHART_PATTERN.search(message)
-    if not match:
-        return issues
-
-    try:
-        chart = json.loads(match.group(1))
-    except json.JSONDecodeError:
-        return [QualityIssue("invalid_chart_json", "The chart block is not valid JSON.")]
-
     if not isinstance(chart, dict) or chart.get("type") != "bar":
-        issues.append(QualityIssue("unsupported_chart", "Only bar charts are supported."))
-        return issues
+        return [QualityIssue("unsupported_chart", "Only bar charts are supported.")]
+    if not isinstance(chart.get("title"), str) or not chart["title"].strip():
+        issues.append(QualityIssue("invalid_chart_data", "A chart must contain a non-empty title."))
     data = chart.get("data")
     if not isinstance(data, list) or not data:
-        issues.append(QualityIssue("invalid_chart_data", "A chart must contain at least one data item."))
-        return issues
-    for item in data:
-        if (
-            not isinstance(item, dict)
-            or not isinstance(item.get("label"), str)
-            or not isinstance(item.get("value"), Number)
-            or isinstance(item.get("value"), bool)
-        ):
-            issues.append(QualityIssue("invalid_chart_data", "Chart items need string labels and numeric values."))
-            break
+        return issues + [QualityIssue("invalid_chart_data", "A chart must contain at least one data item.")]
+    if any(
+        not isinstance(item, dict)
+        or not isinstance(item.get("label"), str)
+        or not isinstance(item.get("value"), Real)
+        or isinstance(item.get("value"), bool)
+        or not math.isfinite(item["value"])
+        for item in data
+    ):
+        issues.append(QualityIssue("invalid_chart_data", "Chart items need string labels and finite numeric values."))
+    return issues
+
+
+def _validate_chart(message: str) -> list[QualityIssue]:
+    issues: list[QualityIssue] = []
+    for match in CHART_PATTERN.finditer(message):
+        try:
+            chart = json.loads(match.group(1))
+        except json.JSONDecodeError:
+            issues.append(QualityIssue("invalid_chart_json", "The chart block is not valid JSON."))
+            continue
+
+        issues.extend(_validate_chart_payload(chart))
     return issues
 
 
@@ -101,7 +122,7 @@ def validate_answer(question: str, answer: ChatResult, trace: AgentTrace) -> Qua
 
 def run_with_quality_harness(
     messages: list[ChatMessage],
-    on_activity=None,
+    on_activity: ActivityCallback | None = None,
     max_attempts: int = 2,
 ) -> ChatResult:
     """Run the agent behind deterministic quality gates and one bounded repair loop."""

@@ -1,63 +1,8 @@
 import styles from './Message.module.scss';
-import { Children, isValidElement } from 'react';
+import { Children, isValidElement, lazy, Suspense } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import Highcharts from 'highcharts';
-import HighchartsReactModule from 'highcharts-react-official';
-
-const HighchartsReact = HighchartsReactModule.default || HighchartsReactModule;
-
-const Chart = ({ chart }) => {
-  const options = {
-    chart: {
-      type: 'column',
-      backgroundColor: 'transparent',
-      height: 360,
-      spacing: [12, 0, 12, 0]
-    },
-    title: {
-      text: chart.title,
-      align: 'left',
-      style: { fontSize: '16px', fontWeight: '600' }
-    },
-    credits: { enabled: false },
-    tooltip: {
-      pointFormat: '<b>{point.y}</b>'
-    },
-    xAxis: {
-      categories: chart.data.map((item) => item.label),
-      title: { text: null },
-      labels: {
-        autoRotation: [-45, -90],
-        style: { fontSize: '12px' }
-      }
-    },
-    yAxis: {
-      min: 0,
-      title: { text: null },
-      labels: { style: { fontSize: '12px' } }
-    },
-    legend: { enabled: false },
-    plotOptions: {
-      column: {
-        color: '#111827',
-        borderRadius: 5,
-        pointPadding: 0.12,
-        groupPadding: 0.08
-      }
-    },
-    series: [{
-      name: 'Value',
-      data: chart.data.map((item) => Number(item.value))
-    }]
-  };
-
-  return (
-    <div className={styles.chart} role="img" aria-label={chart.title}>
-      <HighchartsReact highcharts={Highcharts} options={options} />
-    </div>
-  );
-};
+const Chart = lazy(() => import('../Chart'));
 
 const isChart = (className, value) => {
   if (!className?.includes('language-chart')) return false;
@@ -70,7 +15,10 @@ const isChart = (className, value) => {
       && Array.isArray(chart.data)
       && chart.data.length > 0
       && chart.data.every((item) => (
-        typeof item.label === 'string' && Number.isFinite(Number(item.value))
+        typeof item === 'object'
+        && item !== null
+        && typeof item.label === 'string'
+        && Number.isFinite(item.value)
       ));
   } catch {
     return false;
@@ -104,7 +52,11 @@ const Message = ({ msg, message, role, content }) => {
                 const value = String(children).replace(/\n$/, '');
 
                 if (isChart(className, value)) {
-                  return <Chart chart={JSON.parse(value)} />;
+                  return (
+                    <Suspense fallback={null}>
+                      <Chart chart={JSON.parse(value)} />
+                    </Suspense>
+                  );
                 }
 
                 return <code className={className} {...props}>{children}</code>;

@@ -16,8 +16,10 @@ _client = None
 MAX_AGENT_TURNS = 8
 FALLBACK_MODELS = ("gemini-3.5-flash", "gemini-3.6-flash")
 DEFAULT_MODEL = "gemini-3.5-flash-lite"
+AGENT_TEMPERATURE = 0.2
 ActivityCode = Literal["thinking", "reviewing", "schema", "query", "tool", "answer"]
 ActivityCallback = Callable[[ActivityCode], None]
+TerminationReason = Literal["answer", "max_turns"]
 
 
 @dataclass
@@ -33,7 +35,7 @@ class AgentTrace:
     model_attempts: list[str] = field(default_factory=list)
     activities: list[ActivityCode] = field(default_factory=list)
     tool_calls: list[ToolCallTrace] = field(default_factory=list)
-    termination_reason: str | None = None
+    termination_reason: TerminationReason | None = None
 
 
 class ChatResult(TypedDict):
@@ -121,7 +123,7 @@ def generate_with_fallback(
                 contents=contents,
                 config=config,
             )
-        except Exception as exc:  # pragma: no branch - provider-specific retries
+        except Exception as exc:
             err_str = str(exc)
             if "503" in err_str or "404" in err_str:
                 last_error = exc
@@ -211,7 +213,7 @@ def run_agentic_loop(
         system_instruction=SYSTEM_INSTRUCTION,
         tools=TOOLS,
         automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
-        temperature=0.2,
+        temperature=AGENT_TEMPERATURE,
     )
 
     for turn in range(MAX_AGENT_TURNS):

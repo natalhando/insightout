@@ -6,7 +6,7 @@ export const messageFixture = [
 ];
 
 export const statusThinkingFixture = 'data: {"type":"status","code":"thinking"}\n\n';
-export const resultHelloFixture = 'data: {"type":"result","answer":"Hello world"}\n\n';
+export const resultHelloFixture = 'data: {"type":"result","message":"Hello world"}\n\n';
 
 export function createStreamReader(events) {
   const read = vi.fn();

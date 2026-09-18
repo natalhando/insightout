@@ -48,7 +48,7 @@ describe('postChat', () => {
       }),
     );
     expect(onActivity).toHaveBeenCalledWith(ACTIVITY_LABELS.thinking);
-    expect(result).toEqual({ type: 'result', answer: 'Hello world' });
+    expect(result).toEqual({ type: 'result', message: 'Hello world' });
   });
 
   it('should throw the backend detail when the HTTP response is unsuccessful', async () => {
@@ -69,7 +69,7 @@ describe('postChat', () => {
   it('should use the default activity label when the server status code is unknown', async () => {
     const { DEFAULT_ACTIVITY, postChat } = await loadApiModule();
     const unknownStatus = 'data: {"type":"status","code":"unknown"}\n\n';
-    const followupResult = 'data: {"type":"result","answer":"still good"}\n\n';
+    const followupResult = 'data: {"type":"result","message":"still good"}\n\n';
 
     vi.stubGlobal(
       'fetch',
@@ -84,7 +84,7 @@ describe('postChat', () => {
     const result = await postChat([{ role: 'user', content: 'Test' }], onActivity);
 
     expect(onActivity).toHaveBeenCalledWith(DEFAULT_ACTIVITY);
-    expect(result).toEqual({ type: 'result', answer: 'still good' });
+    expect(result).toEqual({ type: 'result', message: 'still good' });
   });
 
   it('should throw a server error when the stream ends without a result', async () => {
