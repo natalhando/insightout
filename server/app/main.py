@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 
 logger = logging.getLogger(__name__)
 
-# Automatically locate and load the server/.env file
+# Load the repository-level environment file.
 load_dotenv(find_dotenv())
 
 app = FastAPI(title="InsightOut API")

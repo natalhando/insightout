@@ -1,0 +1,29 @@
+# Node.js
+node_modules/
+client/dist/
+client/.vite/
+dist/
+dist-ssr/
+*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local credentials and environment
+.env
+gcp-key.json
+
+# Logs and editor files
+logs/
+*.log
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store

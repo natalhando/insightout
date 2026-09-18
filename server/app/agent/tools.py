@@ -7,7 +7,7 @@ from google.cloud import bigquery
 
 logger = logging.getLogger(__name__)
 
-KEY_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "gcp-key.json"))
+KEY_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "gcp-key.json"))
 GA4_DATASET = "bigquery-public-data.ga4_obfuscated_sample_ecommerce.events_*"
 MAX_RESULT_ROWS = 50
 
